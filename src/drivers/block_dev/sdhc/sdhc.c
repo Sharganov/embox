@@ -88,9 +88,11 @@ static void _reg_dump(void) {
 static void imx6_usdhc_send_cmd(int cmd_idx, uint32_t arg) {
 	uint32_t wcmd;
 
-	wcmd = (cmd_idx & 0x3f) << 24 | (1 << 20) | (1 << 21) | (cmd_idx == 17 ? (0x10) : 0) | 1;
+	wcmd = (cmd_idx & 0x3f) << 24 | (1 << 20) | (1 << 21) | (cmd_idx == 17 ? (0x10) : 0) | 1 | (cmd_idx == 9 ? 0x3 << 16: 0);
 
 	REG32_STORE(USDHC_CMD_ARG, arg);
+
+	log_debug("send cmd: 0x%08x\n", wcmd);
 
 	REG32_STORE(USDHC_CMD_XFR_TYP, wcmd);
 
@@ -146,18 +148,18 @@ static int imx6_usdhc_read(struct block_dev *bdev, char *buffer, size_t count,
 static int imx6_usdhc_write(struct block_dev *bdev, char *buffer, size_t count,
 		blkno_t blkno) {
 	log_debug("sdhc write, addr=0x%x, count=%d", blkno * bdev->block_size, count);
-	int timeout = TIMEOUT;
+	//int timeout = TIMEOUT;
 
 	REG32_STORE(USDHC_INT_STATUS, -1);
 
 	REG32_STORE(USDHC_DS_ADDR, (uint32_t) buffer);
 
 	imx6_usdhc_send_cmd(24, blkno * BLK_LEN);
-
+/*
 	while(!(REG32_LOAD(USDHC_INT_STATUS) & 1) && timeout--);
 	if (timeout == 0)
 		log_debug("read timeout");
-
+*/
 	return 0;
 }
 
@@ -179,10 +181,25 @@ static struct periph_memory_desc imx6_usdhc_mem = {
 
 PERIPH_MEMORY_DEFINE(imx6_usdhc_mem);
 
+static uint32_t sdhc_get_size() {
+	uint32_t t;
+	/* Assume it's not high-capacity SD card */
+	imx6_usdhc_send_cmd(9, 0x4567 << 16);
+	t = (REG32_LOAD(USDHC_CMD_RSP1) >> 6) & 0x3;
+	t |= (REG32_LOAD(USDHC_CMD_RSP1) >> 24) << 2;
+	t |= (REG32_LOAD(USDHC_CMD_RSP2) & 0x3) << 10;
+
+	return 256 * 1024 * (t + 1);
+}
+
 static int imx6_usdhc_probe(void *args) {
+	struct block_dev *bdev;
+
 	log_debug("SDHC probe");
 
-	block_dev_create("sdhc", &imx6_usdhc_driver, NULL);
+	bdev = block_dev_create("sdhc", &imx6_usdhc_driver, NULL);
+	bdev->privdata = NULL;
+	bdev->block_size = BLK_LEN;
 
 	/* SDHC initialization */
 	imx6_usdhc_reset();
@@ -200,8 +217,12 @@ static int imx6_usdhc_probe(void *args) {
 
 	imx6_usdhc_send_cmd(2, 0);
 	imx6_usdhc_send_cmd(3, 0);
+
+	bdev->size = sdhc_get_size();
+	log_debug("bdev size is %d\n", bdev->size);
 	imx6_usdhc_send_cmd(7, 0x4567 << 16);
 
 	_reg_dump();
+
 	return 0;
 }
