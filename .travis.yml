@@ -20,11 +20,11 @@ env:
     - TEMPLATE=x86/test/fs
     - TEMPLATE=x86/test/net
     - TEMPLATE=x86/test/packetdrill
-    - TEMPLATE=sparc/debug
-    - TEMPLATE=mips/debug
-    - TEMPLATE=ppc/debug
+    - TEMPLATE=sparc/qemu	
+    - TEMPLATE=mips/qemu
+    - TEMPLATE=ppc/qemu
     - TEMPLATE=microblaze/petalogix
-    - TEMPLATE=usermode86/debug
+    - TEMPLATE=usermode86/qemu
 
 before_install:
   - travis_retry sudo add-apt-repository -y ppa:team-gcc-arm-embedded/ppa
